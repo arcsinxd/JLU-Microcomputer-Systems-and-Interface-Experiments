@@ -1,0 +1,38 @@
+A8255 EQU 0640H
+B8255 EQU 0642H
+C8255 EQU 0644H
+MODE8255 EQU 0646H  
+ 
+AD0809 EQU 0600H
+ 
+CODE SEGMENT
+    ASSUME CS:CODE
+ 
+START: 
+    MOV DX, MODE8255  
+    MOV AL, 90H
+    OUT DX, AL     
+ 
+MI:
+	
+    MOV DX, AD0809 
+    OUT DX, AL
+ 
+    CALL DELAY
+    IN AL, DX   
+ 
+    MOV DX, B8255
+    OUT DX,AL   
+    JMP MI
+ 
+DELAY:             
+    PUSH CX        
+    PUSH AX
+    MOV CX,0FFFFH;
+L1: LOOP L1    
+    POP AX
+    POP CX 
+    RET
+ 
+CODE ENDS 
+    END START

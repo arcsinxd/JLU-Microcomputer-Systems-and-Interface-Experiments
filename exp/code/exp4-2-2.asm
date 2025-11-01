@@ -1,0 +1,38 @@
+A8255 EQU 0640H
+B8255 EQU 0642H
+C8255 EQU 0644H
+MODE8255 EQU 0646H  
+
+
+AD0809 EQU 0600H
+
+ 
+CODE SEGMENT
+    ASSUME CS:CODE
+START:	  
+    MOV DX, MODE8255  
+    MOV AL, 90H   
+    OUT DX, AL
+ 
+MI:
+    MOV DX, AD0809
+    OUT DX, AL
+X1: 
+    MOV DX,A8255
+    IN AL,DX      
+    TEST AL,80H  
+    JNZ X1         
+X2:    
+ 
+    MOV DX,A8255
+    IN AL,DX        
+    TEST AL,80H    
+    JZ X2
+
+    MOV DX,AD0809
+    IN AL,DX     
+    MOV DX, B8255
+    OUT DX,AL      
+    JMP MI       
+CODE ENDS 
+    END START

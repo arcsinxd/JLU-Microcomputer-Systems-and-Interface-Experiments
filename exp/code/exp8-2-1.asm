@@ -1,0 +1,94 @@
+;注意：接线和pdf不完全一致，8255A口PA0-PA5接到X6-X1
+A8255 EQU 0600H
+B8255 EQU 0602H
+C8255 EQU 0604H
+MODE8255 EQU 0606H
+ 
+DATA SEGMENT
+   TAB:
+    DB 5BH	;2
+    DB 4FH	;3
+    DB 3FH	;0
+    DB 06H	;1
+    DB 3FH	;0
+    DB 5BH	;2
+   FLAG DB 00H;用于保存C口读进来的开关信号
+DATA ENDS   
+ 
+CODE SEGMENT
+    ASSUME CS:CODE,DS:DATA  
+START:
+ 	MOV AX,DATA
+	MOV DS,AX
+	
+	MOV DX,MODE8255
+	MOV AL,89H	;AB口均输出，C口8位输入
+	OUT DX,AL
+	
+	LEA BX,TAB
+MAIN:	
+	MOV AL,11011111B
+	MOV SI,00H
+	MOV CX,06H
+	
+	
+
+AA0:
+	PUSH DX 
+	PUSH AX
+	
+
+	MOV DX,C8255
+	IN AL,DX	;读取开关状态
+	MOV FLAG,AL	;转移到FLAG
+	POP AX
+	POP DX
+	
+	
+	PUSH BX
+	MOV BL,[FLAG] 	;BL存放读进来的开关信号
+	MOV BH,AL		;BH存放位码
+	NOT BH			;位码取反
+	TEST BH,BL		;BH与BL相与，此时BH只有要点亮数码管的那位为1，其他为0，要是开关的这位也为1，与的结果就是1，那么ZF为0，否则ZF是1
+	POP BX
+	JNZ AA1
+	
+;如果为0则不显示	
+	MOV DX,A8255
+	PUSH AX
+	MOV AL,0FFH
+	OUT DX,AL
+	POP AX
+	
+	JMP AA2
+	
+;显示
+AA1:
+	MOV DX,A8255
+	OUT DX,AL
+	PUSH AX	
+	MOV AL,[BX+SI]
+	MOV DX,B8255
+	OUT DX,AL
+	POP AX
+
+;下一位
+AA2:
+	ROR AL,01H
+	INC SI
+	CALL DELAY
+	LOOP AA0
+	JMP MAIN
+
+
+ 
+DELAY:
+    PUSH CX
+    MOV CX,02FFH
+L1:
+    LOOP L1
+    POP CX
+    RET
+	
+CODE ENDS
+     END START

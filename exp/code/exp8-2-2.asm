@@ -1,0 +1,138 @@
+;注意：接线和pdf不完全一致，8255A口PA0-PA5接到X6-X1
+A8255 EQU 0600H
+B8255 EQU 0602H
+C8255 EQU 0604H
+MODE8255 EQU 0606H
+
+ ;8254接IOY1
+A8254 EQU 0640H
+B8254 EQU 0642H 
+C8254 EQU 0644H 
+MODE8254 EQU 0646H
+ 
+DATA SEGMENT
+  TAB:
+    DB 06H
+    DB 5BH
+    DB 4FH
+POS DB ?
+SITE DB ?
+NUM  DB ?
+ 
+DATA ENDS
+ 
+CODE SEGMENT
+    ASSUME CS:CODE,DS:DATA
+START: 
+	MOV AX,0000H
+	MOV DS,AX
+	
+	MOV AX,OFFSET MIR7
+	MOV SI,003CH	;偏移地址放入003C（对应的矢量地址）
+	MOV [SI],AX
+	MOV AX,CS
+	MOV SI,003EH	;段地址放入003E（003C后一个字）
+	MOV [SI],AX
+	POP DS
+ 
+    CLI;关闭cpu中断总开关，先开始初始化
+
+ 
+	MOV AL,11H;ICW1
+	OUT 20H,AL
+	MOV AL,08H;ICW2 08H是起始的中断号，后续会自动分配
+	OUT 21H,AL
+	MOV AL,04H;ICW3
+	OUT 21H,AL
+	MOV AL,03H;ICW4 07改为03 全嵌套+自动结束中断
+	OUT 21H,AL
+	MOV AL,6FH;OCW1 2F改为6F，只开放IR7和串口
+	OUT 21H,AL
+    STI
+   
+        MOV DX, MODE8254
+        MOV AL, 36H             ;计数器0，先低8位再高8位，方式3，二进制
+        OUT DX, AL
+
+        MOV DX, A8254
+        MOV AL, 00H		;4800H等于18432的频率输入
+        OUT DX, AL
+        MOV AL, 48H
+        OUT DX, AL 
+   
+    MOV AX,DATA		
+    MOV DS,AX
+ 
+    ;8255初始化
+    MOV DX,MODE8255
+    MOV AL,81H
+    OUT DX,AL
+    
+    LEA BX,TAB
+    MOV POS,11011111B	
+ 
+MAIN:
+	MOV AL,[POS]		;AL为当前滚动的起始位选码
+	MOV SI, 00H		;123字符串的索引（0，1，2）
+	MOV CX,03H		;循环3次
+AA0:
+	MOV SITE,AL		;位选码存入SITE
+	PUSH AX
+	MOV AL,[BX+SI]	;现在AL为123其中之一的段码
+	MOV NUM,AL     	;段码存入NUM
+	POP AX
+ 
+	CALL DISP	
+	INC SI
+	ROR AL,1	;右移
+	
+	CMP AL,01111111B  	
+	JNZ AA1
+	MOV AL,11011111B	
+	
+AA1:	
+    LOOP AA0	
+	JMP MAIN
+    
+DISP:
+	PUSH AX
+	PUSH DX
+	MOV AL,[SITE]	
+    MOV DX,A8255
+    OUT DX,AL     
+    
+    MOV AL,[NUM]	
+    MOV DX,B8255
+    OUT DX,AL    
+ 
+    CALL DELAY
+    POP DX
+    POP AX
+    RET  
+    
+ 
+DELAY:
+    PUSH CX
+    MOV CX,02FFH
+L1:
+    LOOP L1
+    POP CX
+    RET
+    
+MIR7:
+    PUSH AX
+    MOV AH, [POS]
+    ROR AH,01H
+    CMP AH,01111111B
+	JNZ BB0
+	MOV AH,11011111B
+	MOV POS, AH
+	POP AX
+	IRET
+BB0:
+    MOV POS, AH
+    POP AX
+    IRET
+	
+CODE ENDS
+     END START
