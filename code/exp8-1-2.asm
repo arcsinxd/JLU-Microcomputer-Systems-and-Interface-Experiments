@@ -1,0 +1,65 @@
+;注意：接线和pdf不完全一致，8255A口PA0-PA5接到X6-X1
+A8255 EQU 0600H
+B8255 EQU 0602H
+C8255 EQU 0604H
+MODE8255 EQU 0606H
+ 
+DATA SEGMENT
+TAB:
+    DB 3FH
+    DB 06H
+    DB 5BH
+    DB 4FH
+    DB 66H
+    DB 6DH
+    DB 7DH
+    DB 07H
+    DB 7FH
+    DB 6FH
+DATA ENDS   
+ 
+CODE SEGMENT
+    ASSUME CS:CODE,DS:DATA
+ 
+START:
+    MOV AX,DATA
+    MOV DS,AX
+    
+    MOV DX,MODE8255
+    MOV AL,81H
+    OUT DX,AL         
+    
+    LEA BX,TAB
+ 
+MAIN:
+	MOV CX,06H	 ;循环计数器CX存储次数（6个数码管）
+	MOV SI,00H	;索引
+	MOV AL,11011111B	;从左向右显示
+	
+AA0:
+	MOV DX,A8255
+	OUT DX,AL
+	
+	PUSH AX
+	MOV AL,[BX+SI]
+	MOV DX,B8255
+	OUT DX,AL
+	POP AX
+	
+	ROR AL,1
+	INC SI
+    CALL DELAY
+	LOOP AA0
+	
+	JMP MAIN
+	
+DELAY:
+    PUSH CX
+    MOV CX,00FFH
+L1:
+    LOOP L1
+    POP CX
+    RET
+    
+CODE ENDS
+     END START

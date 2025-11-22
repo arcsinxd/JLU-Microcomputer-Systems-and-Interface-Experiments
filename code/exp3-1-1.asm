@@ -1,0 +1,43 @@
+CODE SEGMENT
+	ASSUME CS:CODE
+START:
+	PUSH DS
+	MOV AX,0000H
+	MOV DS,AX
+	
+	MOV AX,OFFSET MIR7
+	MOV SI,003CH	;偏移地址放入003C（对应的矢量地址）
+	MOV [SI],AX
+	MOV AX,CS
+	MOV SI,003EH	;段地址放入003E（003C后一个字）
+	MOV [SI],AX
+	POP DS
+ 
+    CLI;关闭cpu中断总开关，先开始初始化
+
+ 
+	MOV AL,11H;ICW1
+	OUT 20H,AL
+	MOV AL,08H;ICW2 08H是起始的中断号，后续会自动分配
+	OUT 21H,AL
+	MOV AL,04H;ICW3
+	OUT 21H,AL
+	MOV AL,03H;ICW4 07改为03 全嵌套+自动结束中断
+	OUT 21H,AL
+	MOV AL,6FH;OCW1 2F改为6F，只开放IR7和串口
+
+	OUT 21H,AL
+	
+	STI;开开关
+ 
+MAIN:
+    JMP MAIN
+    
+MIR7:
+    MOV AX,0137H
+
+	INT 10H
+	IRET;返回中断的位置，恢复现场
+	
+CODE ENDS
+     END START

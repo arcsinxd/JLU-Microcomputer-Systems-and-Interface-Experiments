@@ -1,0 +1,422 @@
+A8254 EQU 0640H          	;8254的计数器0地址 
+MODE8254 EQU 0646H      		;8254的控制寄存器地址 
+A8255 EQU 0600H				;8255相关地址
+B8255 EQU 0602H
+C8255 EQU 0604H
+MODE8255 EQU 0606H
+ 
+DATA SEGMENT
+TAB:
+	DB 3FH,06H,5BH,4FH 
+	DB 66H,6DH,7DH,07H 
+	DB 7FH,6FH,77H,7CH 
+	DB 39H,5EH,79H,71H,00H
+TAB2:
+	T6	DB 10H
+	T5	DB 10H
+	T4	DB 10H
+	T3	DB 10H
+	T2	DB 10H
+	T1	DB 10H
+	
+STATE 	DB 00H
+FLAG 	DB 00H
+DATA ENDS
+ 
+CODE SEGMENT
+	ASSUME CS:CODE,DS:DATA
+START:
+	MOV AX,DATA				;导入数据段的变量
+	MOV DS,AX
+	
+SET8254: 
+    MOV AL,36H      		;计时器 0 以方式 3 工作
+    MOV DX,MODE8254
+    OUT DX,AL      
+    
+    MOV DX,A8254			;初值设置4800H
+    MOV AL,00H
+    OUT DX,AL
+    MOV AL,48H
+    OUT DX,AL
+    
+SET8255:
+	MOV DX,MODE8255			;AB输出，C输入
+	MOV AL,81H
+	OUT DX,AL
+	
+SET8259:
+    MOV AX,OFFSET MIR7		;设置中断向量MIR7
+    MOV SI,003CH
+    MOV [ES:SI],AX			;由于导入了数据段，这里设置变量需要改用ES:SI的方式
+    MOV AX,CS
+    MOV SI,003EH
+    MOV [ES:SI],AX
+	
+    CLI  		;关中断
+    MOV AL, 11H    	;ICW1 
+    OUT 20H, AL
+    MOV AL, 08H		;ICW2
+    OUT 21H, AL
+    MOV AL, 04H		;ICW3
+    OUT 21H, AL
+    MOV AL, 07H 	;ICW4
+    OUT 21H, AL
+    MOV AL, 2FH  	;OCW1
+    OUT 21H, AL
+    STI  		;开中断
+    
+MAIN:
+	MOV AL,11110111B	;键盘扫描
+	MOV CX,04H
+M1:
+	MOV DX,A8255
+	OUT DX,AL
+	SHR AL,1
+	
+	PUSH AX				;保存寄存器内容
+	PUSH CX
+	MOV DX,C8255
+	IN AL,DX
+	AND AL,0FH
+	CMP AL,0FH
+	JE M2
+	CALL JUDGE
+	JMP M3
+M2:
+	CMP FLAG,00H
+	JE M3
+	DEC FLAG
+M3:
+	CALL SHOW
+	POP CX				;还原寄存器内容
+	POP AX
+	
+	CALL DELAY
+	LOOP M1
+	JMP MAIN
+	
+JUDGE:
+	NOT AL
+	AND AX,0FH
+	
+	CMP AL,01H			;SWITCH，解码键盘扫描
+	JE D1
+	CMP AL,02H
+	JE D2
+	CMP AL,04H
+	JE D3
+	CMP AL,08H
+	JE D4
+D1:
+	MOV AL,04H
+	JMP D5
+D2:
+	MOV AL,08H
+	JMP D5
+D3:
+	MOV AL,0CH
+	JMP D5
+D4:
+	MOV AL,10H
+	JMP D5
+D5:			
+	ADD AL,CL
+	SUB AL,05H
+	MOV SI,AX			;0-F按键转换为00H-0FH的偏移SI
+	
+	CMP FLAG,00H		;按键互斥操作
+	JNE JUDGE_END
+	
+	CMP SI,0AH			;A ~ F按键的if-else操作
+		JNE D0A
+		CALL PRESS_A
+		JMP JUDGE_END
+	D0A:
+	CMP SI,0BH
+		JNE D0B
+		CALL PRESS_B
+		JMP JUDGE_END
+	D0B:
+	CMP SI,0CH
+		JNE D0C
+		CALL PRESS_C
+		JMP JUDGE_END
+	D0C:
+	CMP SI,0DH
+		JNE D0D
+		CALL PRESS_D
+		JMP JUDGE_END
+	D0D:
+	CMP SI,0EH
+		JNE D0E
+		CALL PRESS_E
+		JMP JUDGE_END
+	D0E:
+	CMP SI,0FH
+		JNE D0F
+		CALL PRESS_F
+		JMP JUDGE_END
+	D0F:
+	
+	CMP STATE,00H
+	JNE JUDGE_END			;初始状态才能设置计时器初值
+	
+	LEA BX,TAB
+	
+	MOV AL,T2
+	MOV T1,AL
+	MOV AX,SI
+	MOV T2,AL
+	
+	JUDGE_END:
+		MOV FLAG,04H		;互斥
+		RET
+ 
+PRESS_A:
+    CMP STATE,02H	;是否正在暂停，则回到初始状态
+		JE D_4
+	CMP STATE,01H	;是否正在工作，则回到初始状态
+		JE D_4
+	CMP STATE,00H	;是否非初始状态
+		JNE D_END
+		
+    CMP T2,10H		;T2未设置
+        JE D_END
+    CMP T2,00H		;T2被设置为0，需要进一步判断T1是否设置
+        JE D_1
+    CMP T1,10H		;T2被设置为1到9，但T1未设置，需要将T1置零
+        JE D_2
+    CMP T1,00H
+        JE D_3
+	D_1:	
+		CMP T1,10H		;T1未设置，无法开始
+			JE D_END
+		CMP T1,00H		;T1也被设置为0，无法开始
+			JE D_END
+		JMP D_3			;T1被设置为1到9，开始计时
+	D_2:
+		MOV T1,00H		;T1置零
+		JMP D_3			;开始计时
+	D_3:
+		MOV STATE,01H	;修改状态
+		MOV T3,00H		;设置 秒 显示
+		MOV T4,00H
+        JMP D_END		
+	D_4:
+        MOV STATE,00H	;修改状态
+        MOV T1,10H		;设置 分和秒 不显示
+        MOV T2,10H
+        MOV T3,10H
+        MOV T4,10H
+        JMP D_END
+	D_END:
+		RET
+PRESS_B:
+    CMP STATE,01H		;如果正在计时，就暂停
+		JE E1
+	CMP STATE,02H		;如果正在暂停，就计时
+		JE E2
+	JMP E3
+	E1:
+		MOV STATE,02H	;修改为暂停状态
+		JMP E3
+	E2:
+		MOV STATE,01H	;修改为计时状态
+		JMP E3
+	E3:
+		RET
+PRESS_C:
+    CALL CLEAR_SHOW
+    MOV STATE,00H	;修改状态
+    MOV T1,10H		;设置 分和秒 不显示
+    MOV T2,10H
+    MOV T3,10H
+    MOV T4,10H
+	JMP EXIT		;退出程序
+		RET
+PRESS_D:				;开始倒计时
+		RET
+	
+PRESS_E:
+		RET
+		
+PRESS_F:
+		RET
+ 
+EXIT:
+	MOV AH,4CH
+	INT 21H
+	
+CLEAR_SHOW:				;清除显示（有更简单的写法）
+	MOV AL,11011111B
+	MOV CX,06H
+	CS2:
+		MOV DX,A8255
+		OUT DX,AL
+		SHR AL,1
+		OR AL,11000000B
+		
+		PUSH AX
+		MOV DX,B8255
+		MOV AL,00H
+		OUT DX,AL
+		POP AX
+		
+		CALL DELAY
+	LOOP CS2
+	RET
+	
+SHOW:					;根据偏移显示对应数字
+	MOV AL,11011111B
+	
+	MOV SI,00H
+	MOV CX,06H
+	S2:
+		
+		MOV DX,A8255
+		OUT DX,AL
+		
+		SHR AL,1
+		OR AL,11000000B
+		
+		PUSH AX
+			LEA BX,TAB2
+			MOV AX,00H
+			MOV AL,[BX+SI]			;第一次偏移获取Ti的值
+			PUSH SI
+				LEA BX,TAB
+				MOV SI,AX
+				MOV AL,[BX+SI]		;第二次偏移获取0到9对应数码管段选码的值
+				MOV DX,B8255
+				OUT DX,AL
+			POP SI
+		POP AX
+		
+		INC SI
+		CALL DELAY
+	
+	LOOP S2
+	
+	RET
+	
+MIR7:		;定时器触发的MIR6中断
+	STI
+	PUSH CX
+	PUSH BX
+	PUSH AX
+	
+	CMP STATE,01H		;如果不在计时状态，则结束
+	JNE MIR_END
+	
+	CALL TIME_DEC		;-1
+	JMP MIR_END
+		
+	MIR_END:
+		POP AX
+		POP BX
+		POP CX
+	IRET
+ 
+TIME_DEC:
+	CMP T4,00H			;借位减法
+		JNE DEC_T4
+		MOV T4,09H
+	CMP T3,00H
+		JNE DEC_T3
+		MOV T3,05H
+	CMP T2,00H
+		JNE DEC_T2
+		MOV T2,09H
+	CMP T1,00H
+		JNE DEC_T1
+		
+	CALL TIME_END		;借无可借
+	JMP DEC_END
+		
+	DEC_T4:
+		DEC T4
+		JMP DEC_END
+	DEC_T3:
+		DEC T3
+		JMP DEC_END
+	DEC_T2:
+		DEC T2
+		JMP DEC_END
+	DEC_T1:
+		DEC T1
+		
+	DEC_END:
+		RET
+	
+	
+TIME_END:
+	PUSH CX
+	
+	MOV STATE,03H		;计时结束状态
+	MOV T4,10H
+	MOV T3,10H
+	MOV T2,10H
+	MOV T1,10H
+	
+		MOV CX, 03H		;闪烁3次
+	TIME_SHIN:
+		CALL TIME_OUT0
+		CALL DELAY_LONG
+		CALL TIME_CLEAR
+		CALL DELAY_LONG
+		LOOP TIME_SHIN
+		
+	MOV STATE,00H		;回归初始状态
+	POP CX
+	RET
+ 
+TIME_OUT0:			;输出0000
+	PUSH AX
+		MOV AL,11110000B
+		MOV DX,A8255
+		OUT DX,AL
+		
+		MOV AL,3FH
+		MOV DX,B8255
+		OUT DX,AL
+	POP AX
+	RET
+	
+TIME_CLEAR:			;清除显示
+	PUSH AX
+		MOV AL,11110000B
+		MOV DX,A8255
+		OUT DX,AL
+		
+		MOV AL,00H
+		MOV DX,B8255
+		OUT DX,AL
+	POP AX
+	RET
+	
+DELAY:
+	PUSH BX
+	MOV BX, 01FFH
+	DEL:
+		DEC BX
+		JNZ DEL
+	POP BX
+	RET
+	
+DELAY_LONG:
+	PUSH BX
+	PUSH CX
+	MOV BX, 0FFFFH
+	DEL2:
+		MOV CX, 06H
+		DEL3:
+			LOOP DEL3
+		DEC BX
+		JNZ DEL2
+	POP CX
+	POP BX
+	RET
+	
+CODE ENDS
+	END START
