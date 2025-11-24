@@ -7,12 +7,12 @@ CODE SEGMENT
      ASSUME CS:CODE
 START:
      MOV DX,MODE8255
-     MOV AL,90H
+     MOV AL,90H	;1001 0000B，8255控制字，A口输入，B口输出（C口输出，但不使用）
      OUT DX,AL
  
 MAIN:    
      MOV DX,A8255
-     IN AL,DX
+     IN AL,DX	;读入开关信号
      
      MOV DX,B8255
      OUT DX,AL

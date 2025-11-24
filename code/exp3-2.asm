@@ -65,7 +65,7 @@ MAIN:
     ROR AL,1;ROR是循环右移指令。它将AL中的所有位向右移动一位，最右边被移出去的位会补到最左边。
     JMP EXIT
 L:
-    ROL AL,1
+    ROL AL,1;ROL是循环左移指令。
     
 EXIT:
     OUT DX,AL

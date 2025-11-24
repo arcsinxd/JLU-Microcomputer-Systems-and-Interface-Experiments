@@ -34,9 +34,9 @@ MAIN:
     JMP MAIN
     
 MIR7:
-    MOV AX,0137H
+    MOV AX,0137H		;打印7，7的ASCII码为37
 
-	INT 10H
+	INT 10H			;当AH=01H时，写AL中的数据到屏上
 	IRET;返回中断的位置，恢复现场
 	
 CODE ENDS

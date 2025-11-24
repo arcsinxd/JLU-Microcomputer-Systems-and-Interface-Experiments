@@ -1,13 +1,14 @@
+;写非规则字
 CODE 	SEGMENT
 		ASSUME	CS:CODE
 START	PROC FAR
 		MOV AX,8000H
 		MOV DS,AX
 AA0:	MOV SI,0000H		
-		MOV CX,000FH		
+		MOV CX,000FH		;因为是非规则字所以变成15个数
 		MOV AX,0100H
-		MOV [SI],00H
-		INC SI
+		MOV [SI],00H		;垫一个字节，从而变成非规则字
+		INC SI			;偏移地址也要跟着移动1个字节
 AA1:	MOV [SI],AX
 		INC AH
 		INC SI
